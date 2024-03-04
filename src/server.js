@@ -83,12 +83,12 @@ app.get("/api/events", async (req, res) => {
 });
 
 app.post("/api/events", [
-        body("name").trim().exists().notEmpty(),
+        body("name").exists().notEmpty().trim(),
         body("host").exists().notEmpty(),
         body("sport").exists().notEmpty().isIn(["Volleyball", "Basketball", "Badminton"]),
         body("timestamp").exists().notEmpty().isCustomTimestamp(),
-        body("location").trim().exists().notEmpty(),
-        body("image").exists(),
+        body("location").exists().notEmpty().trim(),
+        body("image").exists().trim(),
         body("price").exists().notEmpty().isNumeric(),
         body("players").exists().notEmpty().isArray(),
         body("totalNumOfPlayers").exists().notEmpty().isNumeric(),
@@ -115,7 +115,7 @@ app.post("/api/events", [
 
         await db.collection("events").insertOne(eventToInsert);
 
-        res.status(200).json(eventToInsert);
+        res.status(201).json(eventToInsert);
     } catch (error) {
         res.status(400).json({ type: error.name, error: error.message });
     }
@@ -128,14 +128,126 @@ app.get("/api/events/:eventId", async (req, res) => {
         const event = await db.collection("events").findOne({ eventId });
 
         if (!event) {
-            throw new Error("Event does not exist");
+            const error = Error("Event does not exist");
+            error.code = 404;
+            throw error;
         }
 
         const eventResponse = eventResponseFactory(event);
 
         res.json(eventResponse);
     } catch (error) {
-        res.status(400).json({ type: error.name, error: error.message });
+        const errorCode = error.code || 400;
+        res.status(errorCode).json({ type: error.name, error: error.message });
+    }
+});
+
+app.delete("/api/events/:eventId", async (req, res) => {
+    const { eventId } = req.params;
+    
+    try {
+        const event = await db.collection("events").findOneAndDelete({ eventId });
+
+        if (!event) {
+            const error = Error("Event does not exist");
+            error.code = 404;
+            throw error;
+        }
+
+        res.json(event);
+    } catch (error) {
+        const errorCode = error.code || 400;
+        res.status(errorCode).json({ type: error.name, error: error.message });
+    }
+});
+
+const requestBodyIsEmpty = (reqBody) => {
+    for (const value in reqBody) {
+        if (reqBody.hasOwnProperty(value)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+app.put("/api/events/:eventId",[
+        body("name").optional().notEmpty().trim(),
+        body("sport").optional().isIn(["Volleyball", "Basketball", "Badminton"]),
+        body("timestamp").optional().isCustomTimestamp(),
+        body("location").optional().trim(),
+        body("image").optional().trim(),
+        body("price").optional().isNumeric(),
+        body("totalNumOfPlayers").optional().isNumeric(),
+        ], async (req, res) => {
+    const { eventId } = req.params;
+    const {
+        name,
+        sport,
+        timestamp,
+        location,
+        image,
+        price,
+        totalNumOfPlayers } = req.body;
+    
+    try {
+        const event = await db.collection("events").findOne({ eventId });
+        
+        if (!event) {
+            const error = Error("Event does not exist");
+            error.code = 404;
+            throw error;
+        }
+
+        if (requestBodyIsEmpty(req.body)) {
+            throw new Error("No changes were provided");
+        }
+
+        if (name) {
+            await db.collection("events").updateOne({ eventId }, {
+                $set: { name }
+            });
+        }
+
+        if (sport) {
+            await db.collection("events").updateOne({ eventId }, {
+                $set: { sport }
+            });
+        }
+
+        if (timestamp) {
+            await db.collection("events").updateOne({ eventId }, {
+                $set: { timestamp }
+            });
+        }
+
+        if (location) {
+            await db.collection("events").updateOne({ eventId }, {
+                $set: { location }
+            });
+        }
+
+        if (image) {
+            await db.collection("events").updateOne({ eventId }, {
+                $set: { image }
+            });
+        }
+
+        if (price) {
+            await db.collection("events").updateOne({ eventId }, {
+                $set: { price }
+            });
+        }
+
+        if (totalNumOfPlayers) {
+            await db.collection("events").updateOne({ eventId }, {
+                $set: { totalNumOfPlayers }
+            });
+        }
+
+        res.status(200).json({ changes: req.body });
+    } catch (error) {
+        const errorCode = error.code || 400;
+        res.status(errorCode).json({ type: error.name, error: error.message });
     }
 });
 
